@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 
+from typing import Literal
+
 SECRET_KEY = "vulnflow-super-secret-key-change-this"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -176,12 +178,16 @@ def create_vulnerability(
     "/vulnerabilities",
     response_model=schemas.VulnerabilityListResponse,
     responses={
-        401: {"description": "Not authenticated"}    }
+        401: {"description": "Not authenticated"},
+        402: {"description": "Unprocessable Entity"}
+    }
 )
 def get_vulnerabilities(
-    severity: str | None = None,
-    status: str | None = None,
+    severity: Literal["critical", "high", "medium", "low"] | None = None,
+    status: Literal["open", "in_progress", "resolved", "closed"] | None = None,
     asset_id: int | None = None,
+    cve_id: str | None = None,
+    cwe_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -201,6 +207,16 @@ def get_vulnerabilities(
         query = query.filter(
             models.Vulnerability.asset_id == asset_id
         )     
+
+    if cve_id:
+        query = query.filter(
+            models.Vulnerability.cve_id == cve_id
+        )    
+
+    if cwe_id:
+        query = query.filter(
+            models.Vulnerability.cwe_id == cwe_id
+        )
 
     vulnerabilities = query.all()
 
