@@ -74,3 +74,6 @@ class UserResponse(BaseModel):
     username: str
     email: str
     role: str
+
+class UserRoleUpdate(BaseModel):
+    role: Literal["admin", "analyst", "viewer"]
