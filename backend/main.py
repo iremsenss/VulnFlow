@@ -85,6 +85,20 @@ def get_current_user(
     return user
 
 
+def require_role(allowed_roles: list[str]):
+    def role_checker(
+        current_user: models.User = Depends(get_current_user)
+    ):
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=403,
+                detail="Insufficient permissions"
+            )
+
+        return current_user
+
+    return role_checker
+
 app = FastAPI(
     title="VulnFlow API",
     description="Vulnerability Management Platform",
@@ -126,7 +140,9 @@ def health():
 def create_vulnerability(
     vulnerability: schemas.VulnerabilityCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+)
 ):
     asset = db.query(models.Asset).filter(
         models.Asset.id == vulnerability.asset_id
@@ -160,13 +176,11 @@ def create_vulnerability(
     "/vulnerabilities",
     response_model=schemas.VulnerabilityListResponse,
     responses={
-        401: {"description": "Not authenticated"}
-    }
+        401: {"description": "Not authenticated"}    }
 )
 def get_vulnerabilities(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
-
 ):
     vulnerabilities = db.query(models.Vulnerability).all()
 
@@ -184,7 +198,6 @@ def get_vulnerability(
     vulnerability_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
-
 ):
     vulnerability = db.query(models.Vulnerability).filter(
         models.Vulnerability.id == vulnerability_id
@@ -210,7 +223,9 @@ def update_vulnerability(
     vulnerability_id: int,
     updated_vulnerability: schemas.VulnerabilityCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(
+    require_role(["admin", "analyst"])
+)
 ):
     vulnerability = db.query(models.Vulnerability).filter(
         models.Vulnerability.id == vulnerability_id
@@ -252,13 +267,16 @@ def update_vulnerability(
     response_model=schemas.AssetDeleteResponse,
     responses={
         401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
         404: {"description": "Vulnerability not found"}
     }
 )
 def delete_vulnerability(
     vulnerability_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
 ):
     vulnerability = db.query(models.Vulnerability).filter(
         models.Vulnerability.id == vulnerability_id
@@ -274,6 +292,8 @@ def delete_vulnerability(
     db.commit()
 
     return {"message": "Vulnerability deleted successfully"}
+
+
 @app.post(
     "/assets",
     response_model=schemas.AssetCreateResponse,
@@ -281,14 +301,16 @@ def delete_vulnerability(
     responses={
         201: {"description": "Asset created successfully"},
         401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
         409: {"description": "Asset with this value already exists"}
     }
 )
 def create_asset(
     asset: schemas.AssetCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
+    current_user: models.User = Depends(
+    require_role(["admin", "analyst"])
+)):
     existing_asset = db.query(models.Asset).filter(
         models.Asset.value == asset.value
     ).first()
@@ -356,13 +378,16 @@ def get_asset(asset_id: int,
     responses={
         400: {"description": "Asset has associated vulnerabilities"},
         401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
         404: {"description": "Asset not found"}
     }
 )
 def delete_asset(
     asset_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
 ):
     db_asset = db.query(models.Asset).filter(
         models.Asset.id == asset_id
@@ -392,6 +417,7 @@ def delete_asset(
     response_model=schemas.AssetUpdateResponse,
     responses={
         401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
         404: {"description": "Asset not found"}
     }
 )
@@ -399,8 +425,9 @@ def update_asset(
     asset_id: int,
     updated_asset: schemas.AssetUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
+    current_user: models.User = Depends(
+    require_role(["admin", "analyst"])
+    )):
     db_asset = db.query(models.Asset).filter(
         models.Asset.id == asset_id
     ).first()
@@ -506,7 +533,8 @@ def register_user(
     db_user = models.User(
         username=user.username,
         email=user.email,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        role="viewer"
     )
 
     db.add(db_user)
@@ -559,6 +587,7 @@ def login_user(
         "username": user.username
     }
 
+
 @app.get("/me",
     responses={
         401: {"description": "Not authenticated"}
@@ -570,5 +599,6 @@ def read_current_user(
     return {
         "id": current_user.id,
         "username": current_user.username,
-        "email": current_user.email
+        "email": current_user.email,
+        "role": current_user.role
     }
