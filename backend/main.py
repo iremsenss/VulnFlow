@@ -773,3 +773,176 @@ def get_dashboard_stats(
         
         "average_cvss": round(average_cvss, 2) if average_cvss is not None else 0,
     }
+
+
+@app.post(
+    "/scans",
+    response_model=schemas.ScanResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_scan(
+    scan: schemas.ScanCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    asset = db.query(models.Asset).filter(
+        models.Asset.id == scan.asset_id
+    ).first()
+
+    if not asset:
+        raise HTTPException(
+            status_code=404,
+            detail="Asset not found"
+        )
+
+    db_scan = models.Scan(
+        scanner=scan.scanner,
+        scan_type=scan.scan_type,
+        target=scan.target,
+        asset_id=scan.asset_id,
+        status="pending"
+    )
+
+    db.add(db_scan)
+    db.commit()
+    db.refresh(db_scan)
+
+    return db_scan
+
+
+@app.get(
+    "/scans",
+    response_model=list[schemas.ScanResponse],
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+def get_scans(
+    status: Literal["pending", "running", "completed", "failed"] | None = None,
+    scanner: Literal["nmap", "nuclei"] | None = None,
+    asset_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Scan)
+
+    if status:
+        query = query.filter(
+            models.Scan.status == status
+        )
+
+    if scanner:
+        query = query.filter(
+            models.Scan.scanner == scanner
+        )
+
+    if asset_id:
+        query = query.filter(
+            models.Scan.asset_id == asset_id
+        )
+
+    return query.all()
+
+@app.get(
+    "/scans",
+    response_model=list[schemas.ScanResponse],
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+def get_scans(
+    status: Literal["pending", "running", "completed", "failed"] | None = None,
+    scanner: Literal["nmap", "nuclei"] | None = None,
+    asset_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Scan)
+
+    if status:
+        query = query.filter(models.Scan.status == status)
+
+    if scanner:
+        query = query.filter(models.Scan.scanner == scanner)
+
+    if asset_id:
+        query = query.filter(models.Scan.asset_id == asset_id)
+
+    return query.all()
+
+
+@app.patch(
+    "/scans/{scan_id}/status",
+    response_model=schemas.ScanResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Scan not found"}
+    }
+)
+def update_scan_status(
+    scan_id: int,
+    status_update: schemas.ScanStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    scan = db.query(models.Scan).filter(
+        models.Scan.id == scan_id
+    ).first()
+
+    if not scan:
+        raise HTTPException(
+            status_code=404,
+            detail="Scan not found"
+        )
+
+    scan.status = status_update.status
+
+    if status_update.status == "running" and scan.started_at is None:
+        scan.started_at = datetime.now(timezone.utc)
+
+
+    if status_update.status in ["completed", "failed"] and scan.completed_at is None:
+        scan.completed_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(scan)
+
+    return scan
+
+
+@app.delete(
+    "/scans/{scan_id}",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Scan not found"}
+    }
+)
+def delete_scan(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    scan = db.query(models.Scan).filter(
+        models.Scan.id == scan_id
+    ).first()
+
+    if not scan:
+        raise HTTPException(
+            status_code=404,
+            detail="Scan not found"
+        )
+
+    db.delete(scan)
+    db.commit()
+
+    return {
+        "message": "Scan deleted successfully"
+    }

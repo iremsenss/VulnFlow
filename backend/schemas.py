@@ -77,3 +77,28 @@ class UserResponse(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: Literal["admin", "analyst", "viewer"]
+
+
+
+class ScanCreate(BaseModel):
+    scanner: Literal["nmap", "nuclei"]
+    scan_type: str
+    target: str
+    asset_id: int
+
+
+class ScanResponse(BaseModel):
+    id: int
+    scanner: str
+    scan_type: str
+    status: str
+    target: str
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    asset_id: int
+
+
+class ScanStatusUpdate(BaseModel):
+    status: Literal["pending", "running", "completed", "failed"]
+

@@ -45,4 +45,29 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False, default="viewer")
-    
+
+
+class Scan(Base):
+    __tablename__ = "scans"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    scanner = Column(String, nullable=False)
+    scan_type = Column(String, nullable=False)
+
+    status = Column(String, nullable=False, default="pending")
+
+    target = Column(String, nullable=False)
+
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id"),
+        nullable=False
+    )
+
+    asset = relationship("Asset")
