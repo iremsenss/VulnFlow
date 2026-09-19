@@ -179,10 +179,30 @@ def create_vulnerability(
         401: {"description": "Not authenticated"}    }
 )
 def get_vulnerabilities(
+    severity: str | None = None,
+    status: str | None = None,
+    asset_id: int | None = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    vulnerabilities = db.query(models.Vulnerability).all()
+    query = db.query(models.Vulnerability)
+
+    if severity:
+        query = query.filter(
+            models.Vulnerability.severity == severity
+        )
+
+    if status:
+        query = query.filter(
+            models.Vulnerability.status == status
+        )   
+
+    if asset_id:
+        query = query.filter(
+            models.Vulnerability.asset_id == asset_id
+        )     
+
+    vulnerabilities = query.all()
 
     return {"vulnerabilities": vulnerabilities}
 
@@ -338,18 +358,36 @@ def create_asset(
     }
 
 
+
+
 @app.get("/assets", 
          response_model= schemas.AssetListResponse,
          responses={
         401: {"description": "Not authenticated"}
     })
 def get_assets(
+    environment: str | None = None,
+    type: str | None = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    db_assets = db.query(models.Asset).all()
+    query = db.query(models.Asset)
+
+    if environment:
+        query = query.filter(
+            models.Asset.environment == environment
+        )
+
+    if type:
+        query = query.filter(
+        models.Asset.type == type
+        )    
+        
+    db_assets = query.all()
 
     return {"assets": db_assets}
+
+
 
 @app.get("/assets/{asset_id}", 
          response_model=schemas.AssetDetailResponse,
