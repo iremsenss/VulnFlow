@@ -17,6 +17,8 @@ from dotenv import load_dotenv
 
 from typing import Literal
 
+from sqlalchemy import func
+
 SECRET_KEY = "vulnflow-super-secret-key-change-this"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -188,6 +190,8 @@ def get_vulnerabilities(
     asset_id: int | None = None,
     cve_id: str | None = None,
     cwe_id: str | None = None,
+    search: str | None = None,
+    min_cvss: float | None = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -217,6 +221,20 @@ def get_vulnerabilities(
         query = query.filter(
             models.Vulnerability.cwe_id == cwe_id
         )
+
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            models.Vulnerability.title.ilike(search_pattern) |
+            models.Vulnerability.description.ilike(search_pattern) |
+            models.Vulnerability.remediation.ilike(search_pattern)
+        )
+
+    if min_cvss is not None:
+        query = query.filter(
+            models.Vulnerability.cvss_score >= min_cvss
+        )
+            
 
     vulnerabilities = query.all()
 
@@ -693,3 +711,65 @@ def update_user_role(
     db.refresh(user)
 
     return user
+
+
+
+
+@app.get("/dashboard/stats")
+def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    total_assets = db.query(models.Asset).count()
+    total_vulnerabilities = db.query(models.Vulnerability).count()
+
+    critical_count = db.query(models.Vulnerability).filter(
+        models.Vulnerability.severity == "critical"
+    ).count()
+
+    high_count = db.query(models.Vulnerability).filter(
+        models.Vulnerability.severity == "high"
+    ).count()
+
+    medium_count = db.query(models.Vulnerability).filter(
+    models.Vulnerability.severity == "medium"
+).count()
+
+    low_count = db.query(models.Vulnerability).filter(
+    models.Vulnerability.severity == "low"
+).count()
+
+    open_count = db.query(models.Vulnerability).filter(
+    models.Vulnerability.status == "open"
+).count()
+
+    in_progress_count = db.query(models.Vulnerability).filter(
+    models.Vulnerability.status == "in_progress"
+).count()
+
+    resolved_count = db.query(models.Vulnerability).filter(
+    models.Vulnerability.status == "resolved"
+).count()
+
+    closed_count = db.query(models.Vulnerability).filter(
+    models.Vulnerability.status == "closed"
+).count()
+
+    average_cvss = db.query(
+    func.avg(models.Vulnerability.cvss_score)
+).scalar()
+
+    return {
+        "total_assets": total_assets,
+        "total_vulnerabilities": total_vulnerabilities,
+        "critical": critical_count,
+        "high": high_count,
+        "medium": medium_count,
+        "low": low_count,
+        "open": open_count,
+        "resolved": resolved_count,
+        "closed": closed_count,
+        "in_progress": in_progress_count,
+        
+        "average_cvss": round(average_cvss, 2) if average_cvss is not None else 0,
+    }
