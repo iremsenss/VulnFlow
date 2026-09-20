@@ -115,6 +115,7 @@ class FindingResponse(BaseModel):
     cwe_id: str | None = None
     template_id: str | None = None
     severity: str
+    cvss_score: float | None = None
     protocol: str | None = None
     target: str
     description: str | None = None

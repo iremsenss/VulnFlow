@@ -1012,6 +1012,7 @@ def import_scan_output(
                 cwe_id=parsed_result.get("cwe_id"),
                 template_id=parsed_result.get("template_id"),
                 severity=parsed_result.get("severity", "info"),
+                cvss_score=parsed_result.get("cvss_score"),
                 protocol=parsed_result.get("protocol"),
                 target=parsed_result.get("target") or scan.target,
                 evidence=parsed_result.get("evidence") or output.raw_output

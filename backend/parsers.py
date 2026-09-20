@@ -51,7 +51,9 @@ def parse_nuclei_json(raw_output: str):
         "template_id": data.get("template-id"),
         "cve_id": cve_id,
         "cwe_id": cwe_id,
+        "cvss_score": classification.get("cvss-score"),
         "protocol": data.get("type"),
+        
     }
 
 
