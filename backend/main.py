@@ -19,6 +19,9 @@ from typing import Literal
 
 from sqlalchemy import func
 
+from parsers import parse_nuclei_output, parse_nuclei_json, parse_nuclei_jsonl
+
+
 SECRET_KEY = "vulnflow-super-secret-key-change-this"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -946,3 +949,173 @@ def delete_scan(
     return {
         "message": "Scan deleted successfully"
     }
+
+
+
+
+@app.post(
+    "/scans/{scan_id}/import",
+    response_model=schemas.ScanResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Scan not found"}
+    }
+)
+def import_scan_output(
+    scan_id: int,
+    output: schemas.ScanOutputImport,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    scan = db.query(models.Scan).filter(
+        models.Scan.id == scan_id
+    ).first()
+
+    if not scan:
+        raise HTTPException(
+            status_code=404,
+            detail="Scan not found"
+        )
+
+    scan.raw_output = output.raw_output
+
+    parsed_results = []
+
+    if scan.scanner == "nuclei":
+        parsed_results = parse_nuclei_jsonl(output.raw_output)
+
+        if not parsed_results:
+            parsed_result = parse_nuclei_output(output.raw_output)
+
+            if parsed_result:
+                parsed_results.append(parsed_result)
+
+    for parsed_result in parsed_results:
+
+        existing_finding = db.query(models.Finding).filter(
+            models.Finding.scan_id == scan.id,
+            models.Finding.template_id == parsed_result.get("template_id"),
+            models.Finding.target == parsed_result.get("target")
+        ).first()
+
+        if not existing_finding:
+            finding = models.Finding(
+                scan_id=scan.id,
+                asset_id=scan.asset_id,
+                title=parsed_result.get("title")
+                or parsed_result.get("cve_id")
+                or "Unknown Finding",
+                cve_id=parsed_result.get("cve_id"),
+                cwe_id=parsed_result.get("cwe_id"),
+                template_id=parsed_result.get("template_id"),
+                severity=parsed_result.get("severity", "info"),
+                protocol=parsed_result.get("protocol"),
+                target=parsed_result.get("target") or scan.target,
+                evidence=parsed_result.get("evidence") or output.raw_output
+            )
+
+
+            db.add(finding)
+
+    db.commit()
+    db.refresh(scan)
+
+    return scan
+
+
+
+
+@app.get(
+    "/findings",
+    response_model=list[schemas.FindingResponse],
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+def get_findings(
+    severity: Literal["critical", "high", "medium", "low", "info"] | None = None,
+    status: Literal["open", "in_progress", "resolved", "closed"] | None = None,
+    asset_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Finding)
+
+    if severity:
+        query = query.filter(
+            models.Finding.severity == severity
+        )
+
+    if status:
+        query = query.filter(
+            models.Finding.status == status
+        )
+
+    if asset_id:
+        query = query.filter(
+            models.Finding.asset_id == asset_id
+        )
+
+    return query.all()
+
+@app.get(
+    "/findings/{finding_id}",
+    response_model=schemas.FindingResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "Finding not found"}
+    }
+)
+def get_finding(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    finding = db.query(models.Finding).filter(
+        models.Finding.id == finding_id
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
+    return finding
+
+@app.patch(
+    "/findings/{finding_id}/status",
+    response_model=schemas.FindingResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Finding not found"}
+    }
+)   
+def update_finding_status(
+    finding_id: int,
+    status_update: schemas.FindingStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    finding = db.query(models.Finding).filter(
+        models.Finding.id == finding_id
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
+    finding.status = status_update.status
+
+    db.commit()
+    db.refresh(finding)
+
+    return finding

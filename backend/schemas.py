@@ -93,12 +93,34 @@ class ScanResponse(BaseModel):
     scan_type: str
     status: str
     target: str
+    raw_output: str | None = None
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime
     asset_id: int
 
 
+class ScanOutputImport(BaseModel):
+    raw_output: str
+
 class ScanStatusUpdate(BaseModel):
     status: Literal["pending", "running", "completed", "failed"]
 
+class FindingResponse(BaseModel):
+    id: int
+    scan_id: int
+    asset_id: int
+    title: str
+    cve_id: str | None = None
+    cwe_id: str | None = None
+    template_id: str | None = None
+    severity: str
+    protocol: str | None = None
+    target: str
+    description: str | None = None
+    evidence: str | None = None
+    status: str
+    discovered_at: datetime
+
+class FindingStatusUpdate(BaseModel):
+    status: Literal["open", "in_progress", "resolved", "closed"]

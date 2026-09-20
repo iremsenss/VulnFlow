@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text
 from database import Base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -58,6 +58,7 @@ class Scan(Base):
     status = Column(String, nullable=False, default="pending")
 
     target = Column(String, nullable=False)
+    raw_output = Column(Text, nullable=True)
 
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -70,4 +71,35 @@ class Scan(Base):
         nullable=False
     )
 
+    asset = relationship("Asset")
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scan_id = Column(
+        Integer,
+        ForeignKey("scans.id"),
+        nullable=False
+)
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id"),
+        nullable=False
+)
+    title = Column(String, nullable=False)
+    cve_id = Column(String, nullable=True)
+    cwe_id = Column(String, nullable=True)
+    template_id = Column(String, nullable=True)
+    severity = Column(String, nullable=False)
+    cvss_score = Column(Float, nullable=True)
+    protocol = Column(String, nullable=True)
+    target = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    evidence = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="open")
+    discovered_at = Column(DateTime, default=datetime.utcnow)
+
+    scan = relationship("Scan")
     asset = relationship("Asset")
