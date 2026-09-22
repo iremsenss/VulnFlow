@@ -1,5 +1,6 @@
 import re
 import json
+import xml.etree.ElementTree as ET
 
 
 def parse_nuclei_output(raw_output: str):
@@ -74,3 +75,54 @@ def parse_nuclei_jsonl(raw_output: str):
 
     return results
 
+
+def parse_nmap_xml(raw_output: str):
+    try:
+        root = ET.fromstring(raw_output)
+    except ET.ParseError:
+        return None
+
+    hosts = []
+
+    for host in root.findall("host"):
+        address = host.find("address")
+
+        if address is None:
+            continue
+
+        ip_address = address.get("addr")
+        hostname_element = host.find("./hostnames/hostname")
+
+        hostname = (
+            hostname_element.get("name")
+            if hostname_element is not None
+            else None
+        )
+        
+        
+        ports = []
+
+        for port in host.findall("./ports/port"):
+            state = port.find("state")
+
+            if state is None or state.get("state") != "open":
+                continue
+
+            service = port.find("service")
+            
+            ports.append({
+                "port": int(port.get("portid")),
+                "protocol": port.get("protocol"),
+                "state": state.get("state"),
+                "service": service.get("name") if service is not None else None,
+                "product": service.get("product") if service is not None else None,
+                "version": service.get("version") if service is not None else None
+            })
+
+        hosts.append({
+            "ip": ip_address,
+            "hostname": hostname,
+            "ports": ports
+        })
+
+        return hosts

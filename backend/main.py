@@ -19,7 +19,7 @@ from typing import Literal
 
 from sqlalchemy import func
 
-from parsers import parse_nuclei_output, parse_nuclei_json, parse_nuclei_jsonl
+from parsers import parse_nuclei_output, parse_nuclei_json, parse_nuclei_jsonl, parse_nmap_xml
 
 
 SECRET_KEY = "vulnflow-super-secret-key-change-this"
@@ -993,6 +993,39 @@ def import_scan_output(
             if parsed_result:
                 parsed_results.append(parsed_result)
 
+    if scan.scanner == "nmap":
+        nmap_results = parse_nmap_xml(output.raw_output)
+
+        if nmap_results is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid Nmap XML output"
+            )
+
+    for host in nmap_results:
+        for port in host["ports"]:
+
+            existing_service = db.query(models.Service).filter(
+                models.Service.scan_id == scan.id,
+                models.Service.port == port["port"],
+                models.Service.protocol == port["protocol"]
+            ).first()
+
+            if existing_service:
+                continue
+
+            service = models.Service(
+                asset_id=scan.asset_id,
+                scan_id=scan.id,
+                port=port["port"],
+                protocol=port["protocol"],
+                service_name=port["service"],
+                product=port["product"],
+                version=port["version"]
+            )
+
+            db.add(service)
+
     for parsed_result in parsed_results:
 
         existing_finding = db.query(models.Finding).filter(
@@ -1120,3 +1153,31 @@ def update_finding_status(
     db.refresh(finding)
 
     return finding
+
+
+@app.get(
+    "/services",
+    response_model=list[schemas.ServiceResponse],
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+def get_services(
+    asset_id: int | None = None,
+    scan_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Service)
+
+    if asset_id is not None:
+        query = query.filter(
+            models.Service.asset_id == asset_id
+        )
+
+    if scan_id is not None:
+        query = query.filter(
+            models.Service.scan_id == scan_id
+        )
+
+    return query.all()

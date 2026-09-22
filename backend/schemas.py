@@ -125,3 +125,15 @@ class FindingResponse(BaseModel):
 
 class FindingStatusUpdate(BaseModel):
     status: Literal["open", "in_progress", "resolved", "closed"]
+
+
+class ServiceResponse(BaseModel):
+    id: int
+    asset_id: int
+    scan_id: int
+    port: int
+    protocol: str
+    service_name: str | None = None
+    product: str | None = None
+    version: str | None = None
+    discovered_at: datetime

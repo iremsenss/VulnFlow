@@ -103,3 +103,33 @@ class Finding(Base):
 
     scan = relationship("Scan")
     asset = relationship("Asset")
+
+
+class Service(Base):
+    __tablename__ = "services"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id"),
+        nullable=False
+    )
+
+    scan_id = Column(
+        Integer,
+        ForeignKey("scans.id"),
+        nullable=False
+    )
+
+    port = Column(Integer, nullable=False)
+    protocol = Column(String, nullable=False)
+
+    service_name = Column(String, nullable=True)
+    product = Column(String, nullable=True)
+    version = Column(String, nullable=True)
+
+    discovered_at = Column(DateTime, default=datetime.utcnow)
+
+    asset = relationship("Asset")
+    scan = relationship("Scan")
