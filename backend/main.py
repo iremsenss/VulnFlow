@@ -135,24 +135,6 @@ def calculate_risk_score(
     )
 
 
-def calculate_risk_level(
-    risk_score: float | None
-):
-    if risk_score is None:
-        return None
-
-    if risk_score >= 9.0:
-        return "critical"
-    elif risk_score >= 7.0:
-        return "high"
-    elif risk_score >= 4.0:
-        return "medium"
-    elif risk_score > 0:
-        return "low"
-
-    return "informational"
-
-
 app = FastAPI(
     title="VulnFlow API",
     description="Vulnerability Management Platform",
@@ -809,6 +791,86 @@ def get_dashboard_stats(
     func.avg(models.Vulnerability.cvss_score)
 ).scalar()
 
+    total_findings = db.query(models.Finding).count()
+
+    open_findings = db.query(models.Finding).filter(
+        models.Finding.status == "open"
+    ).count()
+
+    in_progress_findings = db.query(models.Finding).filter(
+        models.Finding.status == "in_progress"
+    ).count()
+
+    resolved_findings = db.query(models.Finding).filter(
+        models.Finding.status == "resolved"
+    ).count()
+
+    closed_findings = db.query(models.Finding).filter(
+        models.Finding.status == "closed"
+    ).count()
+
+
+    critical_risk = db.query(models.Finding).filter(
+    models.Finding.risk_score >= 9.0
+).count()
+
+    high_risk = db.query(models.Finding).filter(
+        models.Finding.risk_score >= 7.0,
+        models.Finding.risk_score < 9.0
+    ).count()
+
+    medium_risk = db.query(models.Finding).filter(
+        models.Finding.risk_score >= 4.0,
+        models.Finding.risk_score < 7.0
+    ).count()
+
+    low_risk = db.query(models.Finding).filter(
+        models.Finding.risk_score > 0,
+        models.Finding.risk_score < 4.0
+    ).count()
+
+    average_risk_score = db.query(
+        func.avg(models.Finding.risk_score)
+    ).scalar()
+
+    total_scans = db.query(models.Scan).count()
+
+    pending_scans = db.query(models.Scan).filter(
+        models.Scan.status == "pending"
+    ).count()
+
+    running_scans = db.query(models.Scan).filter(
+        models.Scan.status == "running"
+    ).count()
+
+    completed_scans = db.query(models.Scan).filter(
+        models.Scan.status == "completed"
+    ).count()
+
+    failed_scans = db.query(models.Scan).filter(
+        models.Scan.status == "failed"
+    ).count()
+
+    total_services = db.query(models.Service).count()
+
+
+    retest_not_requested = db.query(models.Finding).filter(
+        models.Finding.retest_status == "not_requested"
+    ).count()
+
+    retest_requested = db.query(models.Finding).filter(
+        models.Finding.retest_status == "requested"
+    ).count()
+
+    retest_passed = db.query(models.Finding).filter(
+        models.Finding.retest_status == "passed"
+    ).count()
+
+    retest_failed = db.query(models.Finding).filter(
+        models.Finding.retest_status == "failed"
+    ).count()
+
+
     return {
         "total_assets": total_assets,
         "total_vulnerabilities": total_vulnerabilities,
@@ -820,8 +882,48 @@ def get_dashboard_stats(
         "resolved": resolved_count,
         "closed": closed_count,
         "in_progress": in_progress_count,
-        
-        "average_cvss": round(average_cvss, 2) if average_cvss is not None else 0,
+        "total_findings": total_findings,
+        "finding_status": {
+            "open": open_findings,
+            "in_progress": in_progress_findings,
+            "resolved": resolved_findings,
+            "closed": closed_findings
+        },
+        "average_cvss": [
+            round(average_cvss, 2)
+            if average_cvss is not None
+            else 0
+        ],
+
+        "finding_risk": {
+            "critical": critical_risk,
+            "high": high_risk,
+            "medium": medium_risk,
+            "low": low_risk,
+            "average_score": (
+                round(average_risk_score, 2)
+                if average_risk_score is not None
+                else 0
+            )
+        },
+
+        "scans": {
+            "total": total_scans,
+            "pending": pending_scans,
+            "running": running_scans,
+            "completed": completed_scans,
+            "failed": failed_scans
+        },
+
+        "total_services": total_services,
+
+        "retest": {
+            "not_requested": retest_not_requested,
+            "requested": retest_requested,
+            "passed": retest_passed,
+            "failed": retest_failed
+        },
+
     }
 
 
