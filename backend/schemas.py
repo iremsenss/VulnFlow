@@ -106,6 +106,9 @@ class ScanOutputImport(BaseModel):
 class ScanStatusUpdate(BaseModel):
     status: Literal["pending", "running", "completed", "failed"]
 
+class FindingAssignmentUpdate(BaseModel):
+    assigned_to: int | None = None  
+
 class FindingResponse(BaseModel):
     id: int
     scan_id: int
@@ -122,6 +125,7 @@ class FindingResponse(BaseModel):
     evidence: str | None = None
     status: str
     discovered_at: datetime
+    assigned_to: int | None = None  # Include the assigned_to field
 
 class FindingStatusUpdate(BaseModel):
     status: Literal["open", "in_progress", "resolved", "closed"]

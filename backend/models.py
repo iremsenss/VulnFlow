@@ -82,12 +82,21 @@ class Finding(Base):
         Integer,
         ForeignKey("scans.id"),
         nullable=False
-)
+    )
     asset_id = Column(
         Integer,
         ForeignKey("assets.id"),
         nullable=False
-)
+    )
+
+    assigned_to = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+
+    
     title = Column(String, nullable=False)
     cve_id = Column(String, nullable=True)
     cwe_id = Column(String, nullable=True)

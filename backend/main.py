@@ -1157,6 +1157,53 @@ def update_finding_status(
     return finding
 
 
+
+@app.patch(
+    "/findings/{finding_id}/assignment",
+    response_model=schemas.FindingResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Finding or user not found"}
+    }
+)
+def update_finding_assignment(
+    finding_id: int,
+    assignment: schemas.FindingAssignmentUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    finding = db.query(models.Finding).filter(
+        models.Finding.id == finding_id
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
+    if assignment.assigned_to is not None:
+        user = db.query(models.User).filter(
+            models.User.id == assignment.assigned_to
+        ).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
+
+    finding.assigned_to = assignment.assigned_to
+
+    db.commit()
+    db.refresh(finding)
+
+    return finding
+
+
 @app.get(
     "/services",
     response_model=list[schemas.ServiceResponse],
