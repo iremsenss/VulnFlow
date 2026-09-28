@@ -95,14 +95,13 @@ class Finding(Base):
         nullable=True
     )
 
-
-    
     title = Column(String, nullable=False)
     cve_id = Column(String, nullable=True)
     cwe_id = Column(String, nullable=True)
     template_id = Column(String, nullable=True)
     severity = Column(String, nullable=False)
     cvss_score = Column(Float, nullable=True)
+    risk_score = Column(Float, nullable=True)
     protocol = Column(String, nullable=True)
     target = Column(String, nullable=False)
     description = Column(String, nullable=True)
@@ -139,6 +138,7 @@ class Finding(Base):
 
     scan = relationship("Scan")
     asset = relationship("Asset")
+
 
 
 class Service(Base):

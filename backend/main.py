@@ -106,6 +106,53 @@ def require_role(allowed_roles: list[str]):
 
     return role_checker
 
+
+
+def calculate_risk_score(
+    cvss_score: float | None,
+    environment: str
+):
+    if cvss_score is None:
+        return None
+
+    environment_weights = {
+        "production": 1.0,
+        "staging": 0.9,
+        "test": 0.8,
+        "development": 0.7
+    }
+
+    weight = environment_weights.get(
+        environment.lower(),
+        0.8
+    )
+
+    risk_score = cvss_score * weight
+
+    return round(
+        min(max(risk_score, 0.0), 10.0),
+        2
+    )
+
+
+def calculate_risk_level(
+    risk_score: float | None
+):
+    if risk_score is None:
+        return None
+
+    if risk_score >= 9.0:
+        return "critical"
+    elif risk_score >= 7.0:
+        return "high"
+    elif risk_score >= 4.0:
+        return "medium"
+    elif risk_score > 0:
+        return "low"
+
+    return "informational"
+
+
 app = FastAPI(
     title="VulnFlow API",
     description="Vulnerability Management Platform",
@@ -1027,8 +1074,19 @@ def import_scan_output(
             )
 
             db.add(service)
+      
 
     for parsed_result in parsed_results:
+
+        
+        asset = db.query(models.Asset).filter(
+            models.Asset.id == scan.asset_id
+        ).first()
+
+        risk_score = calculate_risk_score(
+            parsed_result.get("cvss_score"),
+            asset.environment
+        )  
 
         existing_finding = db.query(models.Finding).filter(
             models.Finding.scan_id == scan.id,
@@ -1048,6 +1106,7 @@ def import_scan_output(
                 template_id=parsed_result.get("template_id"),
                 severity=parsed_result.get("severity", "info"),
                 cvss_score=parsed_result.get("cvss_score"),
+                risk_score=risk_score,
                 protocol=parsed_result.get("protocol"),
                 target=parsed_result.get("target") or scan.target,
                 evidence=parsed_result.get("evidence") or output.raw_output
@@ -1075,6 +1134,8 @@ def get_findings(
     severity: Literal["critical", "high", "medium", "low", "info"] | None = None,
     status: Literal["open", "in_progress", "resolved", "closed"] | None = None,
     asset_id: int | None = None,
+    sort_by_risk: bool = False,
+    min_risk_score: float | None = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -1094,6 +1155,21 @@ def get_findings(
         query = query.filter(
             models.Finding.asset_id == asset_id
         )
+
+    if min_risk_score is not None:
+
+        if not 0 <= min_risk_score <= 10:
+            raise HTTPException(
+                status_code=400,
+                detail="min_risk_score must be between 0 and 10"
+            )
+
+        query = query.filter(
+            models.Finding.risk_score >= min_risk_score
+        )
+
+    if sort_by_risk:
+        query = query.order_by(models.Finding.risk_score.desc())
 
     return query.all()
 
@@ -1331,6 +1407,46 @@ def update_finding_retest_result(
 
     return finding
 
+
+@app.post(
+    "/findings/recalculate-risk",
+    response_model=dict,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"}
+    }
+)
+def recalculate_finding_risks(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    findings = db.query(models.Finding).all()
+
+    updated_count = 0
+
+    for finding in findings:
+        asset = db.query(models.Asset).filter(
+            models.Asset.id == finding.asset_id
+        ).first()
+
+        if not asset:
+            continue
+
+        finding.risk_score = calculate_risk_score(
+            finding.cvss_score,
+            asset.environment
+        )
+
+        updated_count += 1
+
+    db.commit()
+
+    return {
+        "message": "Finding risk scores recalculated",
+        "updated_count": updated_count
+    }
 
 
 @app.get(

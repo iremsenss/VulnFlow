@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from typing import Literal, Optional
 from datetime import datetime
 
@@ -119,6 +119,7 @@ class FindingResponse(BaseModel):
     template_id: str | None = None
     severity: str
     cvss_score: float | None = None
+    risk_score: float | None = None
     protocol: str | None = None
     target: str
     description: str | None = None
@@ -133,6 +134,24 @@ class FindingResponse(BaseModel):
     status: str
     discovered_at: datetime
     assigned_to: int | None = None  # Include the assigned_to field
+
+    @computed_field
+    @property
+    def risk_level(self) -> str | None:
+        if self.risk_score is None:
+            return None
+
+        if self.risk_score >= 9.0:
+            return "critical"
+        elif self.risk_score >= 7.0:
+            return "high"
+        elif self.risk_score >= 4.0:
+            return "medium"
+        elif self.risk_score > 0:
+            return "low"
+
+        return "informational"
+
 
 class FindingStatusUpdate(BaseModel):
     status: Literal["open", "in_progress", "resolved", "closed"]
