@@ -1,6 +1,11 @@
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 
+import csv
+import io
+
+from fastapi.responses import StreamingResponse
+
 import models
 import schemas
 
@@ -1537,3 +1542,286 @@ def get_services(
         )
 
     return query.all()
+
+
+
+
+@app.get(
+    "/reports/summary",
+    response_model=dict,
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+def get_report_summary(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    total_assets = db.query(models.Asset).count()
+    total_scans = db.query(models.Scan).count()
+    total_findings = db.query(models.Finding).count()
+    total_services = db.query(models.Service).count()
+
+    severity_counts = {
+        "critical": db.query(models.Finding).filter(
+            models.Finding.severity == "critical"
+        ).count(),
+
+        "high": db.query(models.Finding).filter(
+            models.Finding.severity == "high"
+        ).count(),
+
+        "medium": db.query(models.Finding).filter(
+            models.Finding.severity == "medium"
+        ).count(),
+
+        "low": db.query(models.Finding).filter(
+            models.Finding.severity == "low"
+        ).count(),
+
+        "info": db.query(models.Finding).filter(
+            models.Finding.severity == "info"
+        ).count()
+
+    }
+
+    status_counts = {
+        "open": db.query(models.Finding).filter(
+            models.Finding.status == "open"
+        ).count(),
+
+        "in_progress": db.query(models.Finding).filter(
+            models.Finding.status == "in_progress"
+        ).count(),
+
+        "resolved": db.query(models.Finding).filter(
+            models.Finding.status == "resolved"
+        ).count(),
+
+        "closed": db.query(models.Finding).filter(
+            models.Finding.status == "closed"
+        ).count()
+    }
+
+    risk_counts = {
+        "critical": db.query(models.Finding).filter(
+            models.Finding.risk_score >= 9.0
+        ).count(),
+
+        "high": db.query(models.Finding).filter(
+            models.Finding.risk_score >= 7.0,
+            models.Finding.risk_score < 9.0
+        ).count(),
+
+        "medium": db.query(models.Finding).filter(
+            models.Finding.risk_score >= 4.0,
+            models.Finding.risk_score < 7.0
+        ).count(),
+
+        "low": db.query(models.Finding).filter(
+            models.Finding.risk_score > 0,
+            models.Finding.risk_score < 4.0
+        ).count()
+    }
+
+    retest_counts = {
+        "not_requested": db.query(models.Finding).filter(
+            models.Finding.retest_status == "not_requested"
+        ).count(),
+
+        "requested": db.query(models.Finding).filter(
+            models.Finding.retest_status == "requested"
+        ).count(),
+
+        "passed": db.query(models.Finding).filter(
+            models.Finding.retest_status == "passed"
+        ).count(),
+
+        "failed": db.query(models.Finding).filter(
+            models.Finding.retest_status == "failed"
+        ).count()
+    }
+
+
+
+    return {
+            "generated_at": datetime.now(timezone.utc),
+
+            "summary": {
+                "assets": total_assets,
+                "scans": total_scans,
+                "findings": total_findings,
+                "services": total_services
+            },
+
+            "severity": severity_counts,
+            "status": status_counts,
+            "risk": risk_counts,
+            "retest": retest_counts
+    }
+
+@app.get(
+    "/reports/findings",
+    response_model=list[schemas.FindingResponse],
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+def get_report_findings(
+    asset_id: int | None = None,
+    severity: Literal[
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+    ] | None = None,
+    status: Literal[
+        "open",
+        "in_progress",
+        "resolved",
+        "closed"
+    ] | None = None,
+    min_risk_score: float | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Finding)
+
+    if asset_id is not None:
+        query = query.filter(
+            models.Finding.asset_id == asset_id
+        )
+
+    if severity is not None:
+        query = query.filter(
+            models.Finding.severity == severity
+        )
+
+    if status is not None:
+        query = query.filter(
+            models.Finding.status == status
+        )
+
+    if min_risk_score is not None:
+        if not 0 <= min_risk_score <= 10:
+            raise HTTPException(
+                status_code=400,
+                detail="min_risk_score must be between 0 and 10"
+            )
+
+        query = query.filter(
+            models.Finding.risk_score >= min_risk_score
+        )    
+
+    return query.order_by(
+        models.Finding.risk_score.desc()
+    ).all()
+
+
+
+
+
+@app.get(
+    "/reports/findings/export/csv",
+    responses={
+        401: {"description": "Not authenticated"}
+    }
+)
+
+def export_findings_csv(
+    asset_id: int | None = None,
+    severity: Literal[
+        "critical",
+        "high",
+        "medium",
+        "low",
+        "info"
+    ] | None = None,
+    status: Literal[
+        "open",
+        "in_progress",
+        "resolved",
+        "closed"
+    ] | None = None,
+    min_risk_score: float | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Finding)
+
+    if asset_id is not None:
+        query = query.filter(
+            models.Finding.asset_id == asset_id
+        )
+
+    if severity is not None:
+        query = query.filter(
+            models.Finding.severity == severity
+        )
+
+    if status is not None:
+        query = query.filter(
+            models.Finding.status == status
+        )
+
+    if min_risk_score is not None:
+        if not 0 <= min_risk_score <= 10:
+            raise HTTPException(
+                status_code=400,
+                detail="min_risk_score must be between 0 and 10"
+            )
+
+        query = query.filter(
+            models.Finding.risk_score >= min_risk_score
+        )
+
+    findings = query.order_by(
+        models.Finding.risk_score.desc()
+    ).all()
+
+    output = io.StringIO()
+
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "ID",
+        "Asset ID",
+        "Title",
+        "CVE",
+        "CWE",
+        "Severity",
+        "CVSS Score",
+        "Risk Score",
+        "Status",
+        "Target",
+        "Remediation",
+        "Retest Status"
+    ])
+
+    for finding in findings:
+        writer.writerow([
+            finding.id,
+            finding.asset_id,
+            finding.title,
+            finding.cve_id or "",
+            finding.cwe_id or "",
+            finding.severity,
+            finding.cvss_score if finding.cvss_score is not None else "",
+            finding.risk_score if finding.risk_score is not None else "",
+            finding.status,
+            finding.target,
+            finding.remediation or "",
+            finding.retest_status
+        ])
+
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                "attachment; filename=vulnflow_findings_report.csv"
+        }
+    )
