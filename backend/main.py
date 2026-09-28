@@ -1204,6 +1204,135 @@ def update_finding_assignment(
     return finding
 
 
+@app.patch(
+    "/findings/{finding_id}/remediation",
+    response_model=schemas.FindingResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Finding not found"}
+    }
+)
+def update_finding_remediation(
+    finding_id: int,
+    remediation_update: schemas.FindingRemediationUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    finding = db.query(models.Finding).filter(
+        models.Finding.id == finding_id
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
+    finding.remediation = remediation_update.remediation
+    finding.remediation_updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(finding)
+
+    return finding
+
+
+
+
+@app.post(
+    "/findings/{finding_id}/retest/request",
+    response_model=schemas.FindingResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Finding not found"}
+    }
+)
+def request_finding_retest(
+    finding_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    finding = db.query(models.Finding).filter(
+        models.Finding.id == finding_id
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
+    finding.retest_status = "requested"
+    finding.retest_requested_at = datetime.utcnow()
+    finding.retest_completed_at = None
+    finding.retest_note = None
+
+    db.commit()
+    db.refresh(finding)
+
+    return finding
+
+
+
+
+
+
+@app.patch(
+    "/findings/{finding_id}/retest/result",
+    response_model=schemas.FindingResponse,
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Finding not found"},
+        400: {"description": "Re-test has not been requested"}
+    }
+)
+def update_finding_retest_result(
+    finding_id: int,
+    result: schemas.FindingRetestResultUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(
+        require_role(["admin", "analyst"])
+    )
+):
+    finding = db.query(models.Finding).filter(
+        models.Finding.id == finding_id
+    ).first()
+
+    if not finding:
+        raise HTTPException(
+            status_code=404,
+            detail="Finding not found"
+        )
+
+    if finding.retest_status != "requested":
+        raise HTTPException(
+            status_code=400,
+            detail="Re-test has not been requested"
+        )
+
+    finding.retest_status = result.status
+    finding.retest_note = result.note
+    finding.retest_completed_at = datetime.utcnow()
+
+    if result.status == "passed":
+        finding.status = "resolved"
+    else:
+        finding.status = "in_progress"
+
+    db.commit()
+    db.refresh(finding)
+
+    return finding
+
+
+
 @app.get(
     "/services",
     response_model=list[schemas.ServiceResponse],

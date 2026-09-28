@@ -123,12 +123,28 @@ class FindingResponse(BaseModel):
     target: str
     description: str | None = None
     evidence: str | None = None
+    remediation: str | None = None
+    remediation_updated_at: datetime | None = None
+    retest_status: str
+    retest_requested_at: datetime | None = None
+    retest_completed_at: datetime | None = None
+    retest_note: str | None = None
+
     status: str
     discovered_at: datetime
     assigned_to: int | None = None  # Include the assigned_to field
 
 class FindingStatusUpdate(BaseModel):
     status: Literal["open", "in_progress", "resolved", "closed"]
+
+
+class FindingRemediationUpdate(BaseModel):
+    remediation: str | None = None
+
+
+class FindingRetestResultUpdate(BaseModel):
+    status: Literal["passed", "failed"]
+    note: str | None = None
 
 
 class ServiceResponse(BaseModel):

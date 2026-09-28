@@ -107,8 +107,35 @@ class Finding(Base):
     target = Column(String, nullable=False)
     description = Column(String, nullable=True)
     evidence = Column(String, nullable=True)
+    remediation = Column(Text, nullable=True)
+    remediation_updated_at = Column(
+        DateTime,
+        nullable=True
+    )
+    retest_status = Column(
+        String,
+        nullable=False,
+        default="not_requested" 
+    )
+
+    retest_requested_at = Column(
+        DateTime,
+        nullable=True
+    )
+
+    retest_completed_at = Column(
+        DateTime,
+        nullable=True
+    )
+
+    retest_note = Column(
+        Text,
+        nullable=True
+    )
+
     status = Column(String, nullable=False, default="open")
     discovered_at = Column(DateTime, default=datetime.utcnow)
+
 
     scan = relationship("Scan")
     asset = relationship("Asset")
