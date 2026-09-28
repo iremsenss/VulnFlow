@@ -583,15 +583,6 @@ def get_asset_vulnerabilities(
     return {"vulnerabilities": asset.vulnerabilities}
 
 
-@app.post(
-    "/register",
-    response_model=schemas.UserResponse,
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        409: {"description": "Username already exists"}
-    }
-)
-
 
 @app.post(
     "/register",
@@ -889,11 +880,7 @@ def get_dashboard_stats(
             "resolved": resolved_findings,
             "closed": closed_findings
         },
-        "average_cvss": [
-            round(average_cvss, 2)
-            if average_cvss is not None
-            else 0
-        ],
+       "average_cvss": round(average_cvss, 2) if average_cvss is not None else 0,
 
         "finding_risk": {
             "critical": critical_risk,
@@ -994,33 +981,6 @@ def get_scans(
         query = query.filter(
             models.Scan.asset_id == asset_id
         )
-
-    return query.all()
-
-@app.get(
-    "/scans",
-    response_model=list[schemas.ScanResponse],
-    responses={
-        401: {"description": "Not authenticated"}
-    }
-)
-def get_scans(
-    status: Literal["pending", "running", "completed", "failed"] | None = None,
-    scanner: Literal["nmap", "nuclei"] | None = None,
-    asset_id: int | None = None,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    query = db.query(models.Scan)
-
-    if status:
-        query = query.filter(models.Scan.status == status)
-
-    if scanner:
-        query = query.filter(models.Scan.scanner == scanner)
-
-    if asset_id:
-        query = query.filter(models.Scan.asset_id == asset_id)
 
     return query.all()
 
