@@ -128,8 +128,11 @@ class Service(Base):
     service_name = Column(String, nullable=True)
     product = Column(String, nullable=True)
     version = Column(String, nullable=True)
-
+    extrainfo = Column(String, nullable=True)
+    hostname = Column(String, nullable=True)
     discovered_at = Column(DateTime, default=datetime.utcnow)
+
+
 
     asset = relationship("Asset")
     scan = relationship("Scan")

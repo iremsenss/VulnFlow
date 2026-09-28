@@ -136,4 +136,6 @@ class ServiceResponse(BaseModel):
     service_name: str | None = None
     product: str | None = None
     version: str | None = None
+    extrainfo: str | None = None
+    hostname: str | None = None
     discovered_at: datetime

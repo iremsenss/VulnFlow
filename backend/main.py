@@ -1021,7 +1021,9 @@ def import_scan_output(
                 protocol=port["protocol"],
                 service_name=port["service"],
                 product=port["product"],
-                version=port["version"]
+                version=port["version"],
+                extrainfo=port.get("extrainfo"),
+                hostname=host.get("hostname")
             )
 
             db.add(service)

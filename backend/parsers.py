@@ -85,7 +85,16 @@ def parse_nmap_xml(raw_output: str):
     hosts = []
 
     for host in root.findall("host"):
-        address = host.find("address")
+
+        host_status = host.find("status")
+
+        if host_status is None or host_status.get("state") != "up":
+            continue
+
+        address = host.find("address[@addrtype='ipv4']")
+
+        if address is None:
+            address = host.find("address[@addrtype='ipv6']")
 
         if address is None:
             continue
@@ -108,15 +117,31 @@ def parse_nmap_xml(raw_output: str):
             if state is None or state.get("state") != "open":
                 continue
 
+            port_id = port.get("portid")
+
+            if port_id is None or not port_id.isdigit():
+                continue
+
+            port_number = int(port_id)
+
+            if not 1 <= port_number <= 65535:
+                continue
+
+            protocol = port.get("protocol")
+
+            if protocol not in ("tcp", "udp"):
+                continue
+
             service = port.find("service")
-            
+
             ports.append({
-                "port": int(port.get("portid")),
-                "protocol": port.get("protocol"),
+                "port": port_number,
+                "protocol": protocol,
                 "state": state.get("state"),
                 "service": service.get("name") if service is not None else None,
                 "product": service.get("product") if service is not None else None,
-                "version": service.get("version") if service is not None else None
+                "version": service.get("version") if service is not None else None,
+                "extrainfo": service.get("extrainfo") if service is not None else None
             })
 
         hosts.append({
